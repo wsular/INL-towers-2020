@@ -1,0 +1,734 @@
+'CR1000X Series Datalogger
+'Copyright (c) 2020 Washington State University. Adapted with permission.
+
+'Date: August 2020
+'Program author: Zhongming Gao 
+'CR3000 for Group C @ 1.2 m (C.1.CR1000X)
+
+'The following sensors are measured:
+'CSAT3B three dimensional sonic anemometer  x  4
+'LI7500/A/RS infrared CO2/H2O gas analyzer  x  4
+'Temperature and relative humidity probe    x  4
+'FW3 fine-wire thermocouple                 x  4
+'TE525 rain gage                            x  1
+'GPS                                        x  1
+'AM25T      				                        x  1
+
+'Abbreviations in comments and variables
+'CR1K   CR1000X
+'CSAT   CSAT3A or CSAT3B
+'sonic  CSAT3A or CSAT3B
+'CS6XX  CS616, CS650, or CS655
+'CS65X  CS650 or CS655
+'cumul  cumulative
+'dia    diameter
+'diag   dignosis
+'dir    direction
+'dist   distance
+'flg    flag
+'FP     footprint
+'Freq   frequency
+'FW     FW05, FW1, or FW3. FW is an abbreviation for fine wire thermocouple
+'intrst interest
+'IRGA   LI7500, LI7500A, or LI7500RS InfraRed Gas Analyzer
+'nmbr   number
+'pct    percent
+'Pyran  pyranometer
+'RH     relative humidity
+'rng    range
+'QC     quality control or quality classification
+'shf    soil heat flux
+'shfp   soil heat flux plate
+'sig    signal
+'strgth strength
+'within win
+'wnd    wind
+'wtr    water
+'hfp01xx HFP01 or HFP01SC soil heat flux plate sensor
+
+'*** Unit Definitions ***
+'SYMBOL      UNIT
+'C           Celsius
+'degrees     angle degrees
+'frac_v_wtr  Fraction volumetric water content
+'g           grams
+'J           Joules
+'Hz          Hertz
+'kg          kilograms
+'kPa         kilopascals
+'m           meters
+'mg          milligrams
+'mmol        millimole
+'mol         mole
+'ms          millisecond
+'s           seconds
+'umol        micromoles
+'usecond     microsecond
+'V           volts
+'W           Watts
+
+
+PipeLineMode
+SDMBeginPort(C5)  'Use C5, C6, and C7 as the SMD port since C1 is used for GPS PPS.
+
+'---------------------------------------------
+' Declare Constants
+'---------------------------------------------
+Const SCN_INTV                   = 100           'Unique: measurement rate 100 ms (10 Hz), 200 ms (5 Hz), or 1000 ms (1 Hz)
+Const SLW_SCN_INTV               = 5000          'Unique: slow sequence measurement rate (ms) >3000 ms and <6000ms (Note: SDI-12 sensors too slow for sub-second intervals)
+Const OUTPUT_INTV                = 5             'Unique: online flux data output interval (minutes).
+Const DAY_RMET_CRD               = 30            'Unique: number of days of Flux and Flux_Notes table data to store in each file on the card.  Number of files stored depends on card size.
+Const DAY_TSRS_CRD               = 1             'Unique: number of days of Time_Series table data to store in each file on the card (days). Number of files stored depends on card size.
+Const SDM_PER                    = 30            'Unique: default SDM clock speed (uS).
+
+Const ANALOG_INTEGRATION As Long = 5000         'Unique: slowsequence analog measurement integration time, _60Hz (e.g. in US, Canada, etc.) or _50Hz (e.g. in Europe, China, etc.)
+
+Const SCAN_BUFFER_SIZE           = 290*INT (1000/SCN_INTV) 'Compute a 290-second scan buffer (The buffer less than 5 minutes is required because of 5-minute interval for data tables used in QC.
+
+Const NMBR_DAY_CPU               = 7             'Number of days for flux data to store on the CPU.
+Const FLUX_SIZE_CPU              = Ceiling ((NMBR_DAY_CPU*1440)/OUTPUT_INTV) 'Size of flux data table on CPU [(days*1440 minutes/day)/(minutes/record)] = records].
+
+Const R       = 8.3143e-3          'Universal gas constant [kPa m^3/(K mol)]
+
+'CSAT3B three dimensional sonic anemometer  x  4
+Const CSAT_SDM_ADDR_C4           = 1           'Unique: SDM address for CSAT3B @ 6 m (C.4.CSAT3B).
+Const CSAT_SDM_ADDR_C3           = 2           'Unique: SDM address for CSAT3B @ 3.5 m (C.3.CSAT3B).
+Const CSAT_SDM_ADDR_C2           = 3           'Unique: SDM address for CSAT3B @ 2 m (C.2.CSAT3B).
+Const CSAT_SDM_ADDR_C1           = 9           'Unique: SDM address for CSAT3B @ 1.2 m (C.1.CSAT3B).
+
+'LI7500RS infrared CO2/H2O gas analyzer     x  4
+Const IRGA_SDM_ADDR_C4           = 5           'Unique: SDM address for IRGA @ 6 m (C.4.IRGA).
+Const IRGA_SDM_ADDR_C3           = 6           'Unique: SDM address for IRGA @ 3.5 m (C.2.IRGA).
+Const IRGA_SDM_ADDR_C2           = 7           'Unique: SDM address for IRGA @ 2 m (C.2.IRGA).
+Const IRGA_SDM_ADDR_C1           = 8           'Unique: SDM address for IRGA @ 1.2 m (C.1.IRGA).
+
+'AM25T      				    x  1
+Const AM25T_DiffChan             =  1          'AM25T Common high & low
+Const AM25T_ClkPort              =  C3         'AM25T Clock
+Const AM25T_ResPort              =  C4         'AM25T Reset
+Const AM25T_ExChan               =  Vx1        'AM25T PRT excitation
+
+'FW3 fine-wire thermocouple                 x  4
+Const FW_ANALOG_INPUT  = 5          'Differential analog input channel for FW
+
+'TE525 rain gage                            x  1
+'Const TE525_PULSE_INPUT = P2          'Pulse input channel rain gauge.
+'Const TE525_MULT = 0.254             'Unique: multiplier for TE525 & TE525WS
+
+'Temperature and relative humidity probe    x  4 @ AM25T
+Const TMPR_RH_ANALOG_INPUT = 1                 'Starting differential analog input channel (AM25T) for temperature and humidity probe.
+Const TMPR_MULT        As Float    = 0.1              'Unique: temperature multiplier HC2S3 = 0.1
+Const TMPR_OFFSET      As Float    = -40              'Unique: temperature offset HC2S3 = -40
+Const RH_MULT          As Float    = 0.1              'Unique: RH multiplier HC2S3 = 0.1, HMP155A = 0.1, or HMP45C = 0.1
+Const RH_OFFSET        As Float    = 0.0              'Unique: RH offset HC2S3 = 0, HMP155A = 0, or HMP45C = 0.
+
+'GPS                                        x  1
+Const GPS16X_COM = ComC1      'Serial port for GPS16X with PPS
+Const UTC_OFFSET = -7        'local time offset from UTC, in hours
+Const MAX_CLOCK_DRIFT = 0  'max clock drift permitted before setting clock, in msec
+
+
+'--------------------------------------------------------
+' Declare Variables, Aliases, and Units
+'---------------------------------------------------------
+'CSAT3B three dimensional sonic anemometer  x  4
+Public sonic(20)                          'Hold sonic data aligned in scan with data from IRGA and/or
+Alias  sonic(1) = Ux_C4
+Alias  sonic(2) = Uy_C4
+Alias  sonic(3) = Uz_C4
+Alias  sonic(4) = Ts_C4
+Alias  sonic(5) = diag_sonic_C4
+Alias  sonic(6) = Ux_C3
+Alias  sonic(7) = Uy_C3
+Alias  sonic(8) = Uz_C3
+Alias  sonic(9) = Ts_C3
+Alias  sonic(10) = diag_sonic_C3
+Alias  sonic(11) = Ux_C2
+Alias  sonic(12) = Uy_C2
+Alias  sonic(13) = Uz_C2
+Alias  sonic(14) = Ts_C2
+Alias  sonic(15) = diag_sonic_C2
+Alias  sonic(16) = Ux_C1
+Alias  sonic(17) = Uy_C1
+Alias  sonic(18) = Uz_C1
+Alias  sonic(19) = Ts_C1
+Alias  sonic(20) = diag_sonic_C1
+Units  Ux_C4 = m/s
+Units  Uy_C4 = m/s
+Units  Uz_C4 = m/s
+Units  Ts_C4 = degC
+Units  diag_sonic_C4 = unitless
+Units  Ux_C3 = m/s
+Units  Uy_C3 = m/s
+Units  Uz_C3 = m/s
+Units  Ts_C3 = degC
+Units  diag_sonic_C3 = unitless
+Units  Ux_C2 = m/s
+Units  Uy_C2 = m/s
+Units  Uz_C2 = m/s
+Units  Ts_C2 = degC
+Units  diag_sonic_C2 = unitless
+Units  Ux_C1 = m/s
+Units  Uy_C1 = m/s
+Units  Uz_C1 = m/s
+Units  Ts_C1 = degC
+Units  diag_sonic_C1 = unitless
+
+'CSAT3B monitor outputs
+Public monitor(16)
+Alias  monitor(1)  = Btemp_C4     'Board Temperature
+Alias  monitor(2)  = Bhumidity_C4 'Board Relative Humidity
+Alias  monitor(3)  = Ipitch_C4    'Inclinometer Pitch
+Alias  monitor(4)  = Iroll_C4     'Inclinometer Roll
+Alias  monitor(5)  = Btemp_C3     'Board Temperature
+Alias  monitor(6)  = Bhumidity_C3 'Board Relative Humidity
+Alias  monitor(7)  = Ipitch_C3    'Inclinometer Pitch
+Alias  monitor(8)  = Iroll_C3     'Inclinometer Roll
+Alias  monitor(9)  = Btemp_C2     'Board Temperature
+Alias  monitor(10) = Bhumidity_C2 'Board Relative Humidity
+Alias  monitor(11) = Ipitch_C2    'Inclinometer Pitch
+Alias  monitor(12) = Iroll_C2     'Inclinometer Roll
+Alias  monitor(13) = Btemp_C1     'Board Temperature
+Alias  monitor(14) = Bhumidity_C1 'Board Relative Humidity
+Alias  monitor(15) = Ipitch_C1    'Inclinometer Pitch
+Alias  monitor(16) = Iroll_C1     'Inclinometer Roll
+Units  Btemp_C4     = degC
+Units  Bhumidity_C4 = %
+Units  Ipitch_C4    = deg
+Units  Iroll_C4     = deg
+Units  Btemp_C3     = degC
+Units  Bhumidity_C3 = %
+Units  Ipitch_C3    = deg
+Units  Iroll_C3     = deg
+Units  Btemp_C2     = degC
+Units  Bhumidity_C2 = %
+Units  Ipitch_C2    = deg
+Units  Iroll_C2     = deg
+Units  Btemp_C1     = degC
+Units  Bhumidity_C1 = %
+Units  Ipitch_C1    = deg
+Units  Iroll_C1     = deg
+
+'CSAT3B diagnostic flags
+Public diag_bits_sonic(36) As Boolean
+Alias diag_bits_sonic(1)  = FLowAmp_C4      'Low Amplitude Flag
+Alias diag_bits_sonic(2)  = FHighAmp_C4     'High Amplitude Flag
+Alias diag_bits_sonic(3)  = FTracking_C4    'Tracking Flag
+Alias diag_bits_sonic(4)  = FHighDeltaC_C4  'High Delta Speed of Sound Flag
+Alias diag_bits_sonic(5)  = FAcq_C4         'Acquiring Flag
+Alias diag_bits_sonic(6)  = FLowVolt_C4     'Low Supply Voltage Flag
+Alias diag_bits_sonic(7)  = FMemErr_C4      'Memory Error Flag
+Alias diag_bits_sonic(8)  = FADCSkip_C4     'ADC Clock Error Flag
+Alias diag_bits_sonic(9)  = FTrigErr_C4     'Trigger Error Flag
+Alias diag_bits_sonic(10) = FLowAmp_C3      'Low Amplitude Flag
+Alias diag_bits_sonic(11) = FHighAmp_C3     'High Amplitude Flag
+Alias diag_bits_sonic(12) = FTracking_C3    'Tracking Flag
+Alias diag_bits_sonic(13) = FHighDeltaC_C3  'High Delta Speed of Sound Flag
+Alias diag_bits_sonic(14) = FAcq_C3         'Acquiring Flag
+Alias diag_bits_sonic(15) = FLowVolt_C3     'Low Supply Voltage Flag
+Alias diag_bits_sonic(16) = FMemErr_C3      'Memory Error Flag
+Alias diag_bits_sonic(17) = FADCSkip_C3     'ADC Clock Error Flag
+Alias diag_bits_sonic(18) = FTrigErr_C3     'Trigger Error Flag
+Alias diag_bits_sonic(19) = FLowAmp_C2      'Low Amplitude Flag
+Alias diag_bits_sonic(20) = FHighAmp_C2     'High Amplitude Flag
+Alias diag_bits_sonic(21) = FTracking_C2    'Tracking Flag
+Alias diag_bits_sonic(22) = FHighDeltaC_C2  'High Delta Speed of Sound Flag
+Alias diag_bits_sonic(23) = FAcq_C2         'Acquiring Flag
+Alias diag_bits_sonic(24) = FLowVolt_C2     'Low Supply Voltage Flag
+Alias diag_bits_sonic(25) = FMemErr_C2      'Memory Error Flag
+Alias diag_bits_sonic(26) = FADCSkip_C2     'ADC Clock Error Flag
+Alias diag_bits_sonic(27) = FTrigErr_C2     'Trigger Error Flag
+Alias diag_bits_sonic(28) = FLowAmp_C1      'Low Amplitude Flag
+Alias diag_bits_sonic(29) = FHighAmp_C1     'High Amplitude Flag
+Alias diag_bits_sonic(30) = FTracking_C1    'Tracking Flag
+Alias diag_bits_sonic(31) = FHighDeltaC_C1  'High Delta Speed of Sound Flag
+Alias diag_bits_sonic(32) = FAcq_C1         'Acquiring Flag
+Alias diag_bits_sonic(33) = FLowVolt_C1     'Low Supply Voltage Flag
+Alias diag_bits_sonic(34) = FMemErr_C1      'Memory Error Flag
+Alias diag_bits_sonic(35) = FADCSkip_C1     'ADC Clock Error Flag
+Alias diag_bits_sonic(36) = FTrigErr_C1     'Trigger Error Flag
+
+'LI7500RS infrared CO2/H2O gas analyzer     x  3
+Public irga(16)
+Alias irga(1)  = co2_C4
+Alias irga(2)  = h2o_C4
+Alias irga(3)  = sig_irga_C4
+Alias irga(4)  = Press_irga_C4
+Alias irga(5)  = co2_C3
+Alias irga(6)  = h2o_C3
+Alias irga(7)  = sig_irga_C3
+Alias irga(8)  = Press_irga_C3
+Alias irga(9)  = co2_C2
+Alias irga(10) = h2o_C2
+Alias irga(11) = sig_irga_C2
+Alias irga(12) = Press_irga_C2
+Alias irga(13) = co2_C1
+Alias irga(14) = h2o_C1
+Alias irga(15) = sig_irga_C1
+Alias irga(16) = Press_irga_C1
+
+Dim LI7500(4)  'Working Variable for LI7500
+
+Units co2_C4        = mg/m^3
+Units h2o_C4        = g/m^3
+Units Press_irga_C4 = kPa
+Units sig_irga_C4  = unitless
+Units co2_C2        = mg/m^3
+Units h2o_C2        = g/m^3
+Units Press_irga_C2 = kPa
+Units sig_irga_C2  = unitless
+Units co2_C1        = mg/m^3
+Units h2o_C1        = g/m^3
+Units Press_irga_C1 = kPa
+Units sig_irga_C1  = unitless
+
+Public mco2(4)
+Alias  mco2(1)  = mco2_C4
+Alias  mco2(2)  = mco2_C3
+Alias  mco2(3)  = mco2_C2
+Alias  mco2(4)  = mco2_C1
+Units  mco2     = ppm
+
+'Temperature and relative humidity probe    x  4
+Public hmp(8)      
+Alias hmp(1) = Tair_C4
+alias hmp(2) = RH_C4
+Alias hmp(3) = Tair_C3
+alias hmp(4) = RH_C3
+Alias hmp(5) = Tair_C2
+alias hmp(6) = RH_C2
+Alias hmp(7) = Tair_C1
+alias hmp(8) = RH_C1
+Units Tair_C4 = DegC
+Units RH_C4   = %
+Units Tair_C3 = DegC
+Units RH_C3   = %
+Units Tair_C2 = DegC
+Units RH_C2   = %
+Units Tair_C1 = DegC
+Units RH_C1   = %
+
+'FW3 fine-wire thermocouple                 x  4
+Public FW(4)
+Alias  FW(1) = FW_C2
+Alias  FW(2) = FW_C1
+Alias  FW(3) = FW_C3
+Alias  FW(4) = FW_C4
+Units  FW = degC
+
+'TE525 rain gage                            x  1
+'Public Precipitation
+'Units  Precipitation = mm
+
+'GPS                                        x  1
+Dim nmea_sentence(2) As String * 100
+
+Public gps_data(15)
+Alias gps_data(1) = latitude_deg            'Degrees latitude (+ = East; - = West)
+Alias gps_data(2) = latitude_min            'Decimal minutes latitude
+Alias gps_data(3) = longitude_deg           'Degress longitude (+ = East; - = West)
+Alias gps_data(4) = longitude_min           'Decimal minutes longitude
+Alias gps_data(5) = speed                   'Speed
+Alias gps_data(6) = course                  'Course over ground
+Alias gps_data(7) = magnetic_variation      'Magnetic variation from true north (+ = East; - = West)
+Alias gps_data(8) = fix_quality             'GPS fix quality: 0 = invalid, 1 = GPS, 2 = 'differential GPS, 6 = estimated
+Alias gps_data(9) = nmbr_satellites         'Number of satellites used for fix
+Alias gps_data(10) = altitude               'Antenna altitude
+Alias gps_data(11) = pps                    'Elapsed ms since last pulse per second (PPS) from GPS
+Alias gps_data(12) = dt_since_gprmc         'Time since last GPRMC string, normally less than '1 second
+Alias gps_data(13) = gps_ready              'Counts from 0 to 10, 10 = ready
+Alias gps_data(14) = max_clock_change       'Maximum value the clock was changed
+Alias gps_data(15) = nmbr_clock_change      'Number of times the clock was changed
+Units latitude_deg = degreesN
+Units latitude_min = minutesN
+Units longitude_deg = degreesE
+Units longitude_min = minutesE
+Units speed = m/s
+Units course = degreesEofN
+Units magnetic_variation = degreesEofN
+Units fix_quality = unitless
+Units nmbr_satellites = unitless
+Units altitude = m
+Units pps = ms
+Units dt_since_gprmc = s
+Units gps_ready = unitless
+Units max_clock_change = ms
+Units nmbr_clock_change = occurrences
+
+'Battery voltage and panel temp
+Public BattV
+Public PTemp_C
+Public RTemp_C
+Units  BattV = Volts
+Units  PTemp_C = degC
+Units  RTemp_C = degC
+
+Dim divisor                                 'Temporary variable used to find molar mixing ratio.
+Dim diag_integer  As Long                   'Temporary variable used to break up the sonic warning flags
+Dim disable_stats_sonic(8) As Boolean       'Intermediate processing sonic disable flags 
+
+'---------------------------------------------
+' Define Output Data Tables
+'---------------------------------------------
+'Time series data
+DataTable (Time_Series, TRUE, -1)
+  DataInterval (0, SCN_INTV, mSec, 0)
+  TableFile ("CRD:"&Status.SerialNumber(1,1)&".Time_Series_", 64, -1, 0, DAY_TSRS_CRD, Day, 0, 0)
+
+  'sonic time series output
+  Sample (20, Ux_C4, IEEE4)
+
+  'IRGA time series output
+  Sample (16, co2_C4,IEEE4)
+
+  'FW time series output
+  Sample (1, FW_C4, IEEE4)
+  Sample (1, FW_C3, IEEE4)
+  Sample (1, FW_C2, IEEE4)
+  Sample (1, FW_C1, IEEE4)
+
+  'T & RH output
+  Sample (2, Tair_C4, FP2)
+  Sample (2, Tair_C3, FP2)
+  Sample (2, Tair_C2, FP2)
+  Sample (2, Tair_C1, FP2)
+  
+EndTable
+
+
+'Meterological data
+DataTable (RMet_1Min, TRUE, -1)
+  DataInterval (0,1,Min,10)
+  TableFile ("CRD:"&Status.SerialNumber(1,1)&".Met_1Min", 64, -1, 0, DAY_RMET_CRD, Day, 0, 0)
+  
+  'T & RH data
+  Average (8,Tair_C4,IEEE4,False)
+
+  'FW3
+  Average  (1, FW_C4, IEEE4,False) 
+  Average  (1, FW_C3, IEEE4,False) 
+  Average  (1, FW_C2, IEEE4,False) 
+  Average  (1, FW_C1, IEEE4,False) 
+
+  'TE525 rain gage                            x  1
+  'Totalize (1, Precipitation, FP2, False)
+
+  Average (1,PTemp_C,IEEE4,False)
+  Average (1,RTemp_C,IEEE4,False)
+  Average (1,BattV,IEEE4,False)
+
+
+EndTable
+
+'Status data
+DataTable (Stats_30Min, TRUE, -1)
+  DataInterval (0,30,Min,10)
+  TableFile ("CRD:"&Status.SerialNumber(1,1)&".Stats_30Min", 64, -1, 0, DAY_RMET_CRD, Day, 0, 0)
+  
+  'T & RH data
+  Average (8,Tair_C4,IEEE4,False)
+
+  'FW3
+  Average  (1, FW_C4, IEEE4,False) 
+  Average  (1, FW_C3, IEEE4,False) 
+  Average  (1, FW_C2, IEEE4,False) 
+  Average  (1, FW_C1, IEEE4,False) 
+
+  'TE525 rain gage                            x  1
+  'Totalize (1, Precipitation, FP2, False)
+
+  'CSATB Monitor
+  Average (16,Btemp_C4,IEEE4,False)
+
+  ' sonic flag
+  Totalize (1,1,IEEE4,disable_stats_sonic(1))
+  FieldNames ("csat_C4")  
+  Totalize (1,1,IEEE4,NOT (disable_stats_sonic(1) OR disable_stats_sonic(2)))
+  FieldNames ("csat_warnings_C4")
+  Totalize (1,1,IEEE4,NOT (FLowAmp_C4) OR NOT (disable_stats_sonic(2)))
+  FieldNames ("Flag_LowAmp_Tot_C4")
+  Totalize (1,1,IEEE4,NOT (FHighAmp_C4) OR NOT (disable_stats_sonic(2)))
+  FieldNames ("Flag_HighAmp_Tot_C4")
+  Totalize (1,1,IEEE4,NOT (FTracking_C4) OR NOT (disable_stats_sonic(2)))
+  FieldNames ("Flag_Tracking_Tot_C4")
+  Totalize (1,1,IEEE4,NOT (FHighDeltaC_C4) OR NOT (disable_stats_sonic(2)))
+  FieldNames ("Flag_HighDeltaC_Tot_C4")
+  Totalize (1,1,IEEE4,NOT (FAcq_C4) OR NOT (disable_stats_sonic(2)))
+  FieldNames ("Flag_Acq_Tot_C4")
+  Totalize (1,1,IEEE4,NOT (FLowVolt_C4) OR NOT (disable_stats_sonic(2)))
+  FieldNames ("Flag_LowVolt_Tot_C4")
+  Totalize (1,1,IEEE4,NOT (FMemErr_C4) OR NOT (disable_stats_sonic(2)))
+  FieldNames ("Flag_MemErr_Tot_C4")
+  Totalize (1,1,IEEE4,NOT (FADCSkip_C4) OR NOT (disable_stats_sonic(2)))
+  FieldNames ("Flag_ADCSkip_Tot_C4")
+  Totalize (1,1,IEEE4,NOT (FTrigErr_C4) OR NOT (disable_stats_sonic(2)))
+  FieldNames ("Flag_TrigErr_Tot_C4")
+
+  Totalize (1,1,IEEE4,disable_stats_sonic(3))
+  FieldNames ("csat_C3")  
+  Totalize (1,1,IEEE4,NOT (disable_stats_sonic(3) OR disable_stats_sonic(4)))
+  FieldNames ("csat_warnings_C3")
+  Totalize (1,1,IEEE4,NOT (FLowAmp_C3) OR NOT (disable_stats_sonic(4)))
+  FieldNames ("Flag_LowAmp_Tot_C3")
+  Totalize (1,1,IEEE4,NOT (FHighAmp_C3) OR NOT (disable_stats_sonic(4)))
+  FieldNames ("Flag_HighAmp_Tot_C3")
+  Totalize (1,1,IEEE4,NOT (FTracking_C3) OR NOT (disable_stats_sonic(4)))
+  FieldNames ("Flag_Tracking_Tot_C3")
+  Totalize (1,1,IEEE4,NOT (FHighDeltaC_C3) OR NOT (disable_stats_sonic(4)))
+  FieldNames ("Flag_HighDeltaC_Tot_C3")
+  Totalize (1,1,IEEE4,NOT (FAcq_C3) OR NOT (disable_stats_sonic(4)))
+  FieldNames ("Flag_Acq_Tot_C3")
+  Totalize (1,1,IEEE4,NOT (FLowVolt_C3) OR NOT (disable_stats_sonic(4)))
+  FieldNames ("Flag_LowVolt_Tot_C3")
+  Totalize (1,1,IEEE4,NOT (FMemErr_C3) OR NOT (disable_stats_sonic(4)))
+  FieldNames ("Flag_MemErr_Tot_C3")
+  Totalize (1,1,IEEE4,NOT (FADCSkip_C3) OR NOT (disable_stats_sonic(4)))
+  FieldNames ("Flag_ADCSkip_Tot_C3")
+  Totalize (1,1,IEEE4,NOT (FTrigErr_C3) OR NOT (disable_stats_sonic(4)))
+  FieldNames ("Flag_TrigErr_Tot_C3")
+
+  Totalize (1,1,IEEE4,disable_stats_sonic(5))
+  FieldNames ("csat_C2")  
+  Totalize (1,1,IEEE4,NOT (disable_stats_sonic(5) OR disable_stats_sonic(6)))
+  FieldNames ("csat_warnings_C2")
+  Totalize (1,1,IEEE4,NOT (FLowAmp_C2) OR NOT (disable_stats_sonic(6)))
+  FieldNames ("Flag_LowAmp_Tot_C2")
+  Totalize (1,1,IEEE4,NOT (FHighAmp_C2) OR NOT (disable_stats_sonic(6)))
+  FieldNames ("Flag_HighAmp_Tot_C2")
+  Totalize (1,1,IEEE4,NOT (FTracking_C2) OR NOT (disable_stats_sonic(6)))
+  FieldNames ("Flag_Tracking_Tot_C2")
+  Totalize (1,1,IEEE4,NOT (FHighDeltaC_C2) OR NOT (disable_stats_sonic(6)))
+  FieldNames ("Flag_HighDeltaC_Tot_C2")
+  Totalize (1,1,IEEE4,NOT (FAcq_C2) OR NOT (disable_stats_sonic(6)))
+  FieldNames ("Flag_Acq_Tot_C2")
+  Totalize (1,1,IEEE4,NOT (FLowVolt_C2) OR NOT (disable_stats_sonic(6)))
+  FieldNames ("Flag_LowVolt_Tot_C2")
+  Totalize (1,1,IEEE4,NOT (FMemErr_C2) OR NOT (disable_stats_sonic(6)))
+  FieldNames ("Flag_MemErr_Tot_C2")
+  Totalize (1,1,IEEE4,NOT (FADCSkip_C2) OR NOT (disable_stats_sonic(6)))
+  FieldNames ("Flag_ADCSkip_Tot_C2")
+  Totalize (1,1,IEEE4,NOT (FTrigErr_C2) OR NOT (disable_stats_sonic(6)))
+  FieldNames ("Flag_TrigErr_Tot_C2")
+
+  Totalize (1,1,IEEE4,disable_stats_sonic(7))
+  FieldNames ("csat_C1")  
+  Totalize (1,1,IEEE4,NOT (disable_stats_sonic(7) OR disable_stats_sonic(8)))
+  FieldNames ("csat_warnings_C1")
+  Totalize (1,1,IEEE4,NOT (FLowAmp_C1) OR NOT (disable_stats_sonic(8)))
+  FieldNames ("Flag_LowAmp_Tot_C1")
+  Totalize (1,1,IEEE4,NOT (FHighAmp_C1) OR NOT (disable_stats_sonic(8)))
+  FieldNames ("Flag_HighAmp_Tot_C1")
+  Totalize (1,1,IEEE4,NOT (FTracking_C1) OR NOT (disable_stats_sonic(8)))
+  FieldNames ("Flag_Tracking_Tot_C1")
+  Totalize (1,1,IEEE4,NOT (FHighDeltaC_C1) OR NOT (disable_stats_sonic(8)))
+  FieldNames ("Flag_HighDeltaC_Tot_C1")
+  Totalize (1,1,IEEE4,NOT (FAcq_C1) OR NOT (disable_stats_sonic(8)))
+  FieldNames ("Flag_Acq_Tot_C1")
+  Totalize (1,1,IEEE4,NOT (FLowVolt_C1) OR NOT (disable_stats_sonic(8)))
+  FieldNames ("Flag_LowVolt_Tot_C1")
+  Totalize (1,1,IEEE4,NOT (FMemErr_C1) OR NOT (disable_stats_sonic(8)))
+  FieldNames ("Flag_MemErr_Tot_C1")
+  Totalize (1,1,IEEE4,NOT (FADCSkip_C1) OR NOT (disable_stats_sonic(8)))
+  FieldNames ("Flag_ADCSkip_Tot_C1")
+  Totalize (1,1,IEEE4,NOT (FTrigErr_C1) OR NOT (disable_stats_sonic(8)))
+  FieldNames ("Flag_TrigErr_Tot_C1")
+
+  Average (1,PTemp_C,IEEE4,False)
+  Average (1,RTemp_C,IEEE4,False)
+  Average (1,BattV,IEEE4,False)
+
+
+EndTable
+
+
+'---------------------------------------------
+' MAIN PROGRAM 
+'---------------------------------------------
+BeginProg
+
+'set original variables to NaN
+Move (sonic(1),20,NaN,20)
+	
+'Set all LI-7500 variables to NaN.
+Move (irga(1),16,NaN,16)
+Move (LI7500(1),4,NaN,4)
+
+'Set FW variables to NaN.
+Move (FW_C4,4,NaN,4)
+	
+'Set 3.3 VDC for pps
+PortPairConfig (C1, 2)
+
+'Set SDM clock speed
+SDMSpeed (SDM_PER)
+
+Scan (SCN_INTV, mSec, SCAN_BUFFER_SIZE, 0)
+  'GPS16X-HVS
+  GPS (gps_data(1),GPS16X_COM,UTC_OFFSET*3600,MAX_CLOCK_DRIFT,nmea_sentence(1))
+
+  'Trigger all SDM instruments to make measurements
+  SDMTrigger()
+
+  PanelTemp (PTemp_C,250) 'Measure data logger panel temperature
+  
+  'FW3 fine-wire thermocouple
+  TCDiff (FW_C2, 1, mV200, FW_ANALOG_INPUT, TypeE, PTemp_C, TRUE, 450, 250, 1, 0)
+
+  'CSAT3B three dimensional sonic anemometer 
+  CSAT3B(sonic(1),0,CSAT_SDM_ADDR_C4,0)
+  CSAT3B(sonic(6),0,CSAT_SDM_ADDR_C3,0)
+  CSAT3B(sonic(11),0,CSAT_SDM_ADDR_C2,0)
+  CSAT3B(sonic(16),0,CSAT_SDM_ADDR_C1,0)
+
+  'LI7500RS infrared CO2/H2O gas analyzer
+  CS7500(irga(1),1,IRGA_SDM_ADDR_C4,7)
+  CS7500(irga(5),1,IRGA_SDM_ADDR_C3,7)
+  CS7500(LI7500(1),1,IRGA_SDM_ADDR_C2,6)
+  CS7500(irga(13),1,IRGA_SDM_ADDR_C1,7)
+
+  'Break up the sonic warning flags into separate bits.
+  diag_integer = diag_sonic_C4
+  diag_bits_sonic(1) = diag_integer AND &h00000001
+  diag_bits_sonic(2) = diag_integer AND &h00000002
+  diag_bits_sonic(3) = diag_integer AND &h00000004
+  diag_bits_sonic(4) = diag_integer AND &h00000008
+  diag_bits_sonic(5) = diag_integer AND &h00000010
+  diag_bits_sonic(6) = diag_integer AND &h00000020
+  diag_bits_sonic(7) = diag_integer AND &h00000040
+  diag_bits_sonic(8) = diag_integer AND &h00000080
+  diag_bits_sonic(9) = diag_integer AND &h00000100
+  'Turn on this intermediate processing disable flag when any
+  'warning flag is set or the data returned is NaN
+  disable_stats_sonic(1) = ((diag_integer AND &hffffffff) OR (diag_sonic_C4 = NaN))
+  'Turn on this intermediate processing disable flag only when
+  'CSAT3B diagnostic warning flags are set
+  disable_stats_sonic(2) = ((diag_integer AND &hffffffff) AND NOT (diag_sonic_C4 = NaN))
+ 
+  diag_integer = diag_sonic_C3
+  diag_bits_sonic(10) = diag_integer AND &h00000001
+  diag_bits_sonic(11) = diag_integer AND &h00000002
+  diag_bits_sonic(12) = diag_integer AND &h00000004
+  diag_bits_sonic(13) = diag_integer AND &h00000008
+  diag_bits_sonic(14) = diag_integer AND &h00000010
+  diag_bits_sonic(15) = diag_integer AND &h00000020
+  diag_bits_sonic(16) = diag_integer AND &h00000040
+  diag_bits_sonic(17) = diag_integer AND &h00000080
+  diag_bits_sonic(18) = diag_integer AND &h00000100
+  'Turn on this intermediate processing disable flag when any
+  'warning flag is set or the data returned is NaN
+  disable_stats_sonic(3) = ((diag_integer AND &hffffffff) OR (diag_sonic_C3 = NaN))
+  'Turn on this intermediate processing disable flag only when
+  'CSAT3B diagnostic warning flags are set
+  disable_stats_sonic(4) = ((diag_integer AND &hffffffff) AND NOT (diag_sonic_C3 = NaN))
+
+  diag_integer = diag_sonic_C2
+  diag_bits_sonic(19) = diag_integer AND &h00000001
+  diag_bits_sonic(20) = diag_integer AND &h00000002
+  diag_bits_sonic(21) = diag_integer AND &h00000004
+  diag_bits_sonic(22) = diag_integer AND &h00000008
+  diag_bits_sonic(23) = diag_integer AND &h00000010
+  diag_bits_sonic(24) = diag_integer AND &h00000020
+  diag_bits_sonic(25) = diag_integer AND &h00000040
+  diag_bits_sonic(26) = diag_integer AND &h00000080
+  diag_bits_sonic(27) = diag_integer AND &h00000100
+  'Turn on this intermediate processing disable flag when any
+  'warning flag is set or the data returned is NaN
+  disable_stats_sonic(5) = ((diag_integer AND &hffffffff) OR (diag_sonic_C2 = NaN))
+  'Turn on this intermediate processing disable flag only when
+  'CSAT3B diagnostic warning flags are set
+  disable_stats_sonic(6) = ((diag_integer AND &hffffffff) AND NOT (diag_sonic_C2 = NaN))
+
+  diag_integer = diag_sonic_C1
+  diag_bits_sonic(28) = diag_integer AND &h00000001
+  diag_bits_sonic(29) = diag_integer AND &h00000002
+  diag_bits_sonic(30) = diag_integer AND &h00000004
+  diag_bits_sonic(31) = diag_integer AND &h00000008
+  diag_bits_sonic(32) = diag_integer AND &h00000010
+  diag_bits_sonic(33) = diag_integer AND &h00000020
+  diag_bits_sonic(34) = diag_integer AND &h00000040
+  diag_bits_sonic(35) = diag_integer AND &h00000080
+  diag_bits_sonic(36) = diag_integer AND &h00000100
+  'Turn on this intermediate processing disable flag when any
+  'warning flag is set or the data returned is NaN
+  disable_stats_sonic(7) = ((diag_integer AND &hffffffff) OR (diag_sonic_C1 = NaN))
+  'Turn on this intermediate processing disable flag only when
+  'CSAT3B diagnostic warning flags are set
+  disable_stats_sonic(8) = ((diag_integer AND &hffffffff) AND NOT (diag_sonic_C1 = NaN))
+
+  'LI7500 
+  co2_C2 = LI7500(1)
+  h2o_C2 = LI7500(2)
+  Press_irga_C2 = LI7500(3)
+  sig_irga_C2 = INT ((LI7500(4) AND &h000f) * 6.25)
+  
+  '-------------------------------------------------------------------
+  'Convert LI-7500 data from molar density [mmol/m^3] to mass density.
+  ' 44 [g/mol] - molecular weight of carbon dioxide
+  ' 0.018 [g/mmol] - molecular weight of water vapor
+  '-------------------------------------------------------------------
+  If ( NOT (co2_C4 = -99999) ) Then ( co2_C4 = co2_C4*44 )
+  h2o_C4 = h2o_C4*0.018
+  If ( NOT (co2_C3 = -99999) ) Then ( co2_C3 = co2_C3*44 )
+  h2o_C3 = h2o_C3*0.018
+  If ( NOT (co2_C2 = -99999) ) Then ( co2_C2 = co2_C2*44 )
+  h2o_C2 = h2o_C2*0.018
+  If ( NOT (co2_C1 = -99999) ) Then ( co2_C1 = co2_C1*44 )
+  h2o_C1 = h2o_C1*0.018
+   
+  'Compute CO2 molar density by molar fraction (ppm)
+  divisor = (Press_irga_C4/(R*(Ts_C4+273.15)))-(h2o_C4/18)
+  mco2_C4 = co2_C4/(0.04401*divisor)
+  divisor = (Press_irga_C3/(R*(Ts_C3+273.15)))-(h2o_C3/18)
+  mco2_C3 = co2_C3/(0.04401*divisor)
+  divisor = (Press_irga_C2/(R*(Ts_C2+273.15)))-(h2o_C2/18)
+  mco2_C2 = co2_C2/(0.04401*divisor)
+  divisor = (Press_irga_C1/(R*(Ts_C1+273.15)))-(h2o_C1/18)
+  mco2_C1 = co2_C1/(0.04401*divisor)
+  
+  'TE525 rain gage       
+  'PulseCount (Precipitation, 1, TE525_PULSE_INPUT, 1, 0, TE525_MULT, 0)
+
+  'Save time series data.
+  CallTable Time_Series
+
+  'Save meterological data
+  CallTable RMet_1Min
+
+  'Save status data
+  CallTable Stats_30Min
+
+NextScan
+
+SlowSequence
+
+Scan (SLW_SCN_INTV,mSec,10,0)
+  Battery (BattV)         'Measure battery voltage.
+
+  'CSAT3B three dimensional sonic anemometer 
+  CSAT3BMonitor(monitor(1),0,CSAT_SDM_ADDR_C4)
+  CSAT3BMonitor(monitor(5),0,CSAT_SDM_ADDR_C3)
+  CSAT3BMonitor(monitor(9),0,CSAT_SDM_ADDR_C2)
+  CSAT3BMonitor(monitor(13),0,CSAT_SDM_ADDR_C1)
+
+  'Temperature and relative humidity probe
+  AM25T(Tair_C1,2,mV1000,1,AM25T_DiffChan,-1,RTemp_C,AM25T_ClkPort,AM25T_ResPort,AM25T_ExChan,True,0,ANALOG_INTEGRATION,1,0)
+  AM25T(Tair_C2,2,mV1000,3,AM25T_DiffChan,-1,RTemp_C,AM25T_ClkPort,AM25T_ResPort,AM25T_ExChan,True,0,ANALOG_INTEGRATION,1,0)
+  AM25T(Tair_C3,2,mV1000,5,AM25T_DiffChan,-1,RTemp_C,AM25T_ClkPort,AM25T_ResPort,AM25T_ExChan,True,0,ANALOG_INTEGRATION,1,0)
+  AM25T(Tair_C4,2,mV1000,7,AM25T_DiffChan,-1,RTemp_C,AM25T_ClkPort,AM25T_ResPort,AM25T_ExChan,True,0,ANALOG_INTEGRATION,1,0)
+  Tair_C4 = Tair_C4 * TMPR_MULT + TMPR_OFFSET
+  RH_C4   = RH_C4 * RH_MULT + RH_OFFSET
+  Tair_C3 = Tair_C3 * TMPR_MULT + TMPR_OFFSET
+  RH_C3   = RH_C3 * RH_MULT + RH_OFFSET
+  Tair_C2 = Tair_C2 * TMPR_MULT + TMPR_OFFSET
+  RH_C2   = RH_C2 * RH_MULT + RH_OFFSET
+  Tair_C1 = Tair_C1 * TMPR_MULT + TMPR_OFFSET
+  RH_C1   = RH_C1 * RH_MULT + RH_OFFSET
+
+  If (RH_C4 > 100 AND RH_C4 <103) Then (RH_C4 =100)
+  If (RH_C3 > 100 AND RH_C3 <103) Then (RH_C3 =100)
+  If (RH_C2 > 100 AND RH_C2 <103) Then (RH_C2 =100)
+  If (RH_C1 > 100 AND RH_C1 <103) Then (RH_C1 =100)
+
+NextScan
+
+EndProg
