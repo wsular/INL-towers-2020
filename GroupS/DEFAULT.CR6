@@ -79,7 +79,7 @@ Const OUTPUT_INTV                = 30            'Unique: online flux data outpu
 Const DAY_RMET_CRD               = 30            'Unique: number of days of Flux and Flux_Notes table data to store in each file on the card.  Number of files stored depends on card size.
 Const DAY_TSRS_CRD               = 1             'Unique: number of days of Time_Series table data to store in each file on the card (days). Number of files stored depends on card size.
 
-Const ANALOG_INTEGRATION         = 60         'Unique: slowsequence analog measurement integration time, _60Hz (e.g. in US, Canada, etc.) or _50Hz (e.g. in Europe, China, etc.)
+Const ANALOG_INTEGRATION         = 5000         'Unique: slowsequence analog measurement integration time, _60Hz (e.g. in US, Canada, etc.) or _50Hz (e.g. in Europe, China, etc.)
 
 Const NMBR_DAY_CPU               = 7             'Number of days for flux data to store on the CPU.
 Const FLUX_SIZE_CPU              = Ceiling ((NMBR_DAY_CPU*1440)/OUTPUT_INTV) 'Size of flux data table on CPU [(days*1440 minutes/day)/(minutes/record)] = records].
@@ -148,7 +148,7 @@ Dim sw12_1_state As Boolean              'State of the switched 12Vdc port 1.
 
 'GPS                                        x  1
 Const GPS16X_COM = COMU1        'Serial port for GPS16X with PPS
-Const UTC_OFFSET = -8        'local time offset from UTC, in hours
+Const UTC_OFFSET = -7        'local time offset from UTC, in hours
 Const MAX_CLOCK_DRIFT = 1.0  'max clock drift permitted before setting clock, in msec
 
 
@@ -253,7 +253,6 @@ DataTable (RMet_1Min, TRUE, -1)
 
   'LI190R
   Sample  (1, PAR_density_S, IEEE4)
-  Sample (1, QUANTUM_SENS, FP2)
 
   'SI-111                                     x  1
   Sample  (1, T_SI111_targeted, IEEE4)
@@ -291,7 +290,6 @@ DataTable (Stats_30Min, TRUE, -1)
 
   'LI190R
   Average  (1, PAR_density_S, IEEE4,False)
-  Sample (1, QUANTUM_SENS, FP2)
 
   'SI-111                                     x  1
   Average  (1, T_SI111_targeted, IEEE4, False)
