@@ -2,16 +2,17 @@
 'Copyright (c) 2020 Washington State University. Adapted with permission.
 
 'Date: August 2020
+'updated: April 2021
 'Program author: Zhongming Gao 
 'CR1000X for Group B @ 12.5 m (B.2.CR1000X)
 
 'The following sensors are measured:
 'CSAT3B three dimensional sonic anemometer  x  3
 'CSAT3  three dimensional sonic anemometer  x  1
-'LI7500RS infrared CO2/H2O gas analyzer     x  2
+'LI7500RS infrared CO2/H2O gas analyzer     x  4
 'Temperature and relative humidity probe    x  4
 'LI190R quantum (PAR) sensor                x  1
-'FW3 fine-wire thermocouple                 x  1
+'FW3 fine-wire thermocouple                 x  4
 'GPS                                        x  1
 'AM25T      				    x  1
 
@@ -76,13 +77,13 @@ SDMBeginPort(C5)  'Use C5, C6, and C7 as the SMD port since C1 is used for GPS P
 ' Declare Constants
 '---------------------------------------------
 Const SCN_INTV                   = 100           'Unique: measurement rate 100 ms (10 Hz), 200 ms (5 Hz), or 1000 ms (1 Hz)
-Const SLW_SCN_INTV               = 3000          'Unique: slow sequence measurement rate (ms) >3000 ms and <6000ms (Note: SDI-12 sensors too slow for sub-second intervals)
+Const SLW_SCN_INTV               = 5000          'Unique: slow sequence measurement rate (ms) >3000 ms and <6000ms (Note: SDI-12 sensors too slow for sub-second intervals)
 Const OUTPUT_INTV                = 5             'Unique: online flux data output interval (minutes).
 Const DAY_RMET_CRD               = 30            'Unique: number of days of Flux and Flux_Notes table data to store in each file on the card.  Number of files stored depends on card size.
 Const DAY_TSRS_CRD               = 1             'Unique: number of days of Time_Series table data to store in each file on the card (days). Number of files stored depends on card size.
-Const SDM_PER                    = 50            'Unique: default SDM clock speed (uS).
+Const SDM_PER                    = 60            'Unique: default SDM clock speed (uS).
 
-Const ANALOG_INTEGRATION         = 60         'Unique: slowsequence analog measurement integration time, _60Hz (e.g. in US, Canada, etc.) or _50Hz (e.g. in Europe, China, etc.)
+Const ANALOG_INTEGRATION         = 5000         'Unique: slowsequence analog measurement integration time, _60Hz (e.g. in US, Canada, etc.) or _50Hz (e.g. in Europe, China, etc.)
 
 Const SCAN_BUFFER_SIZE           = 290*INT (1000/SCN_INTV) 'Compute a 290-second scan buffer (The buffer less than 5 minutes is required because of 5-minute interval for data tables used in QC.
 
@@ -101,7 +102,9 @@ Const CSAT_OPT                   = INT (1000/SCN_INTV)      '10 Hz
 
 'LI7500RS infrared CO2/H2O gas analyzer     x  2
 Const IRGA_SDM_ADDR_B4           = 5           'Unique: SDM address for IRGA @ 23 m (B.4.IRGA).
+Const IRGA_SDM_ADDR_B3           = 6           'Unique: SDM address for IRGA @ 12.5 m (B.2.IRGA).
 Const IRGA_SDM_ADDR_B2           = 7           'Unique: SDM address for IRGA @ 12.5 m (B.2.IRGA).
+Const IRGA_SDM_ADDR_B1           = 8           'Unique: SDM address for IRGA @ 12.5 m (B.2.IRGA).
 
 'AM25T      				    x  1
 Const AM25T_DiffChan             =  1          'AM25T Common high & low
@@ -116,8 +119,8 @@ Const QUANTUM_MULT          = 1000/(QUANTUM_SENS*0.604)   'Unique: multiplier (1
 Const QUANTUM_OFFSET        = 0     'Unique: offset for for quantum PAR sensor.
 
 
-'FW3 fine-wire thermocouple                 x  1
-Const FW_ANALOG_INPUT  = 4          'Differential analog input channel for FW (Input channel 5 or 11 is recommended)
+'FW3 fine-wire thermocouple                 x  4
+Const FW_ANALOG_INPUT  = 5          'Differential analog input channel for FW (Input channel 5 or 11 is recommended)
 
 'Temperature and relative humidity probe    x  4 @ AM25T
 Const TMPR_RH_ANALOG_INPUT = 1                 'Starting differential analog input channel (AM25T) for temperature and humidity probe.
@@ -130,8 +133,8 @@ Const RH_OFFSET        As Float    = 0.0              'Unique: RH offset HC2S3 =
 
 'GPS                                        x  1
 Const GPS16X_COM = ComC1      'Serial port for GPS16X with PPS
-Const UTC_OFFSET = -8        'local time offset from UTC, in hours
-Const MAX_CLOCK_DRIFT = 1.0  'max clock drift permitted before setting clock, in msec
+Const UTC_OFFSET = -7        'local time offset from UTC, in hours
+Const MAX_CLOCK_DRIFT = 0.0  'max clock drift permitted before setting clock, in msec
 
 
 '--------------------------------------------------------
@@ -242,28 +245,47 @@ Alias diag_bits_sonic(30) = FTracking_B1    'Tracking Flag
 Alias diag_bits_sonic(31) = FHighDeltaC_B1  'High Delta Speed of Sound Flag
 
 'LI7500RS infrared CO2/H2O gas analyzer     x  2
-Public irga(8)
+Public irga(16)
 Alias irga(1)  = co2_B4
 Alias irga(2)  = h2o_B4
 Alias irga(3)  = sig_irga_B4
 Alias irga(4)  = Press_irga_B4
-Alias irga(5)  = co2_B2
-Alias irga(6)  = h2o_B2
-Alias irga(7)  = sig_irga_B2
-Alias irga(8)  = Press_irga_B2
+Alias irga(5)  = co2_B3
+Alias irga(6)  = h2o_B3
+Alias irga(7)  = sig_irga_B3
+Alias irga(8)  = Press_irga_B3
+Alias irga(9)  = co2_B2
+Alias irga(10) = h2o_B2
+Alias irga(11) = sig_irga_B2
+Alias irga(12) = Press_irga_B2
+Alias irga(13) = co2_B1
+Alias irga(14) = h2o_B1
+Alias irga(15) = sig_irga_B1
+Alias irga(16) = Press_irga_B1
 
 Units co2_B4        = mg/m^3
 Units h2o_B4        = g/m^3
 Units Press_irga_B4 = kPa
 Units sig_irga_B4   = unitless
+Units co2_B3        = mg/m^3
+Units h2o_B3        = g/m^3
+Units Press_irga_B3 = kPa
+Units sig_irga_B3   = unitless
 Units co2_B2        = mg/m^3
 Units h2o_B2        = g/m^3
 Units Press_irga_B2 = kPa
 Units sig_irga_B2   = unitless
+Units co2_B1        = mg/m^3
+Units h2o_B1        = g/m^3
+Units Press_irga_B1 = kPa
+Units sig_irga_B1   = unitless
 
-Public mco2(2)
+
+Public mco2(4)
 Alias  mco2(1)  = mco2_B4
-Alias  mco2(2)  = mco2_B2
+Alias  mco2(2)  = mco2_B3
+Alias  mco2(3)  = mco2_B2
+Alias  mco2(4)  = mco2_B1
 Units  mco2     = ppm
 
 'Temperature and relative humidity probe    x  4
@@ -289,9 +311,13 @@ Units RH_B1   = %
 Public PAR_density_B2
 Units  PAR_density_B2 = umol/(s m^2)
 
-'FW3 fine-wire thermocouple                 x  1
-Public FW_B2
-Units  FW_B2 = degC
+'FW3 fine-wire thermocouple                 x  4
+Public FW(4)
+Alias  FW(1) = FW_B1
+Alias  FW(2) = FW_B2
+Alias  FW(3) = FW_B3
+Alias  FW(4) = FW_B4
+Units  FW = degC
 
 'GPS                                        x  1
 Dim nmea_sentence(2) As String * 100
@@ -345,21 +371,26 @@ Dim disable_stats_sonic(8) As Boolean       'Intermediate processing sonic disab
 '---------------------------------------------
 'Time series data
 DataTable (Time_Series, TRUE, -1)
-  DataInterval (0, SCN_INTV, mSec, 100)
+  DataInterval (0, SCN_INTV, mSec, 0)
   TableFile ("CRD:"&Status.SerialNumber(1,1)&".Time_Series_", 64, -1, 0, DAY_TSRS_CRD, Day, 0, 0)
 
   'sonic time series output
   Sample (20, Ux_B4, IEEE4)
 
   'IRGA time series output
-  Sample (8, co2_B4,IEEE4)
+  Sample (16, co2_B4,IEEE4)
 
   'FW time series output
+  Sample (1, FW_B4, IEEE4)
+  Sample (1, FW_B3, IEEE4)
   Sample (1, FW_B2, IEEE4)
+  Sample (1, FW_B1, IEEE4)
 
   'T & RH output
   Sample (2, Tair_B4, FP2)
+  Sample (2, Tair_B3, FP2)
   Sample (2, Tair_B2, FP2)
+  Sample (2, Tair_B1, FP2)
   
 EndTable
 
@@ -368,75 +399,18 @@ EndTable
 DataTable (RMet_1Min, TRUE, -1)
   DataInterval (0,1,Min,10)
   TableFile ("CRD:"&Status.SerialNumber(1,1)&".Met_1Min", 64, -1, 0, DAY_RMET_CRD, Day, 0, 0)
-
-  'Sonic data
-  Average (1,Ts_B4,IEEE4,disable_stats_sonic(1))
-  StdDev  (1,Ts_B4,IEEE4,disable_stats_sonic(1))
-  Average (1,Ts_B3,IEEE4,disable_stats_sonic(3))
-  StdDev  (1,Ts_B3,IEEE4,disable_stats_sonic(3))
-  Average (1,Ts_B2,IEEE4,disable_stats_sonic(5))
-  StdDev  (1,Ts_B2,IEEE4,disable_stats_sonic(5))
-  Average (1,Ts_B1,IEEE4,disable_stats_sonic(7))
-  StdDev  (1,Ts_B1,IEEE4,disable_stats_sonic(7))
-  Average (1,Ux_B4,IEEE4,disable_stats_sonic(1))
-  StdDev  (1,Ux_B4,IEEE4,disable_stats_sonic(1))
-  Average (1,Ux_B3,IEEE4,disable_stats_sonic(3))
-  StdDev  (1,Ux_B3,IEEE4,disable_stats_sonic(3))
-  Average (1,Ux_B2,IEEE4,disable_stats_sonic(5))
-  StdDev  (1,Ux_B2,IEEE4,disable_stats_sonic(5))
-  Average (1,Ux_B1,IEEE4,disable_stats_sonic(7))
-  StdDev  (1,Ux_B1,IEEE4,disable_stats_sonic(7))
-  Average (1,Uy_B4,IEEE4,disable_stats_sonic(1))
-  StdDev  (1,Uy_B4,IEEE4,disable_stats_sonic(1))
-  Average (1,Uy_B3,IEEE4,disable_stats_sonic(3))
-  StdDev  (1,Uy_B3,IEEE4,disable_stats_sonic(3))
-  Average (1,Uy_B2,IEEE4,disable_stats_sonic(5))
-  StdDev  (1,Uy_B2,IEEE4,disable_stats_sonic(5))
-  Average (1,Uy_B1,IEEE4,disable_stats_sonic(7))
-  StdDev  (1,Uy_B1,IEEE4,disable_stats_sonic(7))
-  Average (1,Uz_B4,IEEE4,disable_stats_sonic(1))
-  StdDev  (1,Uz_B4,IEEE4,disable_stats_sonic(1))
-  Average (1,Uz_B3,IEEE4,disable_stats_sonic(3))
-  StdDev  (1,Uz_B3,IEEE4,disable_stats_sonic(3))
-  Average (1,Uz_B2,IEEE4,disable_stats_sonic(5))
-  StdDev  (1,Uz_B2,IEEE4,disable_stats_sonic(5))
-  Average (1,Uz_B1,IEEE4,disable_stats_sonic(7))
-  StdDev  (1,Uz_B1,IEEE4,disable_stats_sonic(7))
-
-  WindVector (1,Uy_B4,Ux_B4,IEEE4,disable_stats_sonic(1),0,1,2)
-  FieldNames ("ws_B4,ws_rslt_B4,wd_csat_B4,wd_sigma_B4")
-  WindVector (1,Uy_B3,Ux_B3,IEEE4,disable_stats_sonic(3),0,1,2)
-  FieldNames ("ws_B3,ws_rslt_B3,wd_csat_B3,wd_sigma_B3")
-  WindVector (1,Uy_B2,Ux_B2,IEEE4,disable_stats_sonic(5),0,1,2)
-  FieldNames ("ws_B2,ws_rslt_B2,wd_csat_B2,wd_sigma_B2")
-  WindVector (1,Uy_B1,Ux_B1,IEEE4,disable_stats_sonic(7),0,1,2)
-  FieldNames ("ws_B1,ws_rslt_B1,wd_csat_B1,wd_sigma_B1")
-
-  'Irga data
-  Average (1,co2_B4,IEEE4,False)
-  StdDev  (1,co2_B4,IEEE4,False)
-  Average (1,co2_B2,IEEE4,False)
-  StdDev  (1,co2_B2,IEEE4,False)
-  Average (1,h2o_B4,IEEE4,False)
-  StdDev  (1,h2o_B4,IEEE4,False)
-  Average (1,h2o_B2,IEEE4,False)
-  StdDev  (1,h2o_B2,IEEE4,False)
-  Average (1,mco2_B4,IEEE4,False)
-  StdDev  (1,mco2_B4,IEEE4,False)
-  Average (1,mco2_B2,IEEE4,False)
-  StdDev  (1,mco2_B2,IEEE4,False)
-  Average (1,Press_irga_B4,IEEE4,False)
-  Average (1,Press_irga_B2,IEEE4,False)
   
   'T & RH data
   Average (8,Tair_B4,IEEE4,False)
 
   'LI190R
   Average  (1, PAR_density_B2, IEEE4,False)
-  Sample (1, QUANTUM_SENS, FP2)
 
   'FW3
+  Average  (1, FW_B4, IEEE4,False) 
+  Average  (1, FW_B3, IEEE4,False) 
   Average  (1, FW_B2, IEEE4,False) 
+  Average  (1, FW_B1, IEEE4,False) 
 
   Average (1,PTemp_C,IEEE4,False)
   Average (1,RTemp_C,IEEE4,False)
@@ -448,81 +422,25 @@ EndTable
 DataTable (Stats_30Min, TRUE, -1)
   DataInterval (0,30,Min,10)
   TableFile ("CRD:"&Status.SerialNumber(1,1)&".Stats_30Min", 64, -1, 0, DAY_RMET_CRD, Day, 0, 0)
-
-  'Sonic data
-  Average (1,Ts_B4,IEEE4,disable_stats_sonic(1))
-  StdDev  (1,Ts_B4,IEEE4,disable_stats_sonic(1))
-  Average (1,Ts_B3,IEEE4,disable_stats_sonic(3))
-  StdDev  (1,Ts_B3,IEEE4,disable_stats_sonic(3))
-  Average (1,Ts_B2,IEEE4,disable_stats_sonic(5))
-  StdDev  (1,Ts_B2,IEEE4,disable_stats_sonic(5))
-  Average (1,Ts_B1,IEEE4,disable_stats_sonic(7))
-  StdDev  (1,Ts_B1,IEEE4,disable_stats_sonic(7))
-  Average (1,Ux_B4,IEEE4,disable_stats_sonic(1))
-  StdDev  (1,Ux_B4,IEEE4,disable_stats_sonic(1))
-  Average (1,Ux_B3,IEEE4,disable_stats_sonic(3))
-  StdDev  (1,Ux_B3,IEEE4,disable_stats_sonic(3))
-  Average (1,Ux_B2,IEEE4,disable_stats_sonic(5))
-  StdDev  (1,Ux_B2,IEEE4,disable_stats_sonic(5))
-  Average (1,Ux_B1,IEEE4,disable_stats_sonic(7))
-  StdDev  (1,Ux_B1,IEEE4,disable_stats_sonic(7))
-  Average (1,Uy_B4,IEEE4,disable_stats_sonic(1))
-  StdDev  (1,Uy_B4,IEEE4,disable_stats_sonic(1))
-  Average (1,Uy_B3,IEEE4,disable_stats_sonic(3))
-  StdDev  (1,Uy_B3,IEEE4,disable_stats_sonic(3))
-  Average (1,Uy_B2,IEEE4,disable_stats_sonic(5))
-  StdDev  (1,Uy_B2,IEEE4,disable_stats_sonic(5))
-  Average (1,Uy_B1,IEEE4,disable_stats_sonic(7))
-  StdDev  (1,Uy_B1,IEEE4,disable_stats_sonic(7))
-  Average (1,Uz_B4,IEEE4,disable_stats_sonic(1))
-  StdDev  (1,Uz_B4,IEEE4,disable_stats_sonic(1))
-  Average (1,Uz_B3,IEEE4,disable_stats_sonic(3))
-  StdDev  (1,Uz_B3,IEEE4,disable_stats_sonic(3))
-  Average (1,Uz_B2,IEEE4,disable_stats_sonic(5))
-  StdDev  (1,Uz_B2,IEEE4,disable_stats_sonic(5))
-  Average (1,Uz_B1,IEEE4,disable_stats_sonic(7))
-  StdDev  (1,Uz_B1,IEEE4,disable_stats_sonic(7))
-
-  WindVector (1,Uy_B4,Ux_B4,IEEE4,disable_stats_sonic(1),0,1,2)
-  FieldNames ("ws_B4,ws_rslt_B4,wd_csat_B4,wd_sigma_B4")
-  WindVector (1,Uy_B3,Ux_B3,IEEE4,disable_stats_sonic(3),0,1,2)
-  FieldNames ("ws_B3,ws_rslt_B3,wd_csat_B3,wd_sigma_B3")
-  WindVector (1,Uy_B2,Ux_B2,IEEE4,disable_stats_sonic(5),0,1,2)
-  FieldNames ("ws_B2,ws_rslt_B2,wd_csat_B2,wd_sigma_B2")
-  WindVector (1,Uy_B1,Ux_B1,IEEE4,disable_stats_sonic(7),0,1,2)
-  FieldNames ("ws_B1,ws_rslt_B1,wd_csat_B1,wd_sigma_B1")
-
-  'Irga data
-  Average (1,co2_B4,IEEE4,False)
-  StdDev  (1,co2_B4,IEEE4,False)
-  Average (1,co2_B2,IEEE4,False)
-  StdDev  (1,co2_B2,IEEE4,False)
-  Average (1,h2o_B4,IEEE4,False)
-  StdDev  (1,h2o_B4,IEEE4,False)
-  Average (1,h2o_B2,IEEE4,False)
-  StdDev  (1,h2o_B2,IEEE4,False)
-  Average (1,mco2_B4,IEEE4,False)
-  StdDev  (1,mco2_B4,IEEE4,False)
-  Average (1,mco2_B2,IEEE4,False)
-  StdDev  (1,mco2_B2,IEEE4,False)
-  Average (1,Press_irga_B4,IEEE4,False)
-  Average (1,Press_irga_B2,IEEE4,False)
   
   'T & RH data
   Average (8,Tair_B4,IEEE4,False)
 
   'LI190R
   Average  (1, PAR_density_B2, IEEE4,False)
-  Sample (1, QUANTUM_SENS, FP2)
 
   'FW3
-  Average  (1, FW_B2, IEEE4,False)
+  Average  (1, FW_B4, IEEE4,False) 
+  Average  (1, FW_B3, IEEE4,False) 
+  Average  (1, FW_B2, IEEE4,False) 
+  Average  (1, FW_B1, IEEE4,False) 
 
   'CSATB Monitor
   Average (12,Btemp_B4,IEEE4,False)
 
   ' sonic flag
   Totalize (1,1,IEEE4,disable_stats_sonic(1))
+  FieldNames ("csat_B4")  
   Totalize (1,1,IEEE4,NOT (disable_stats_sonic(1) OR disable_stats_sonic(2)))
   FieldNames ("csat_warnings_B4")
   Totalize (1,1,IEEE4,NOT (FLowAmp_B4) OR NOT (disable_stats_sonic(2)))
@@ -545,6 +463,7 @@ DataTable (Stats_30Min, TRUE, -1)
   FieldNames ("Flag_TrigErr_Tot_B4")
 
   Totalize (1,1,IEEE4,disable_stats_sonic(3))
+  FieldNames ("csat_B3")  
   Totalize (1,1,IEEE4,NOT (disable_stats_sonic(3) OR disable_stats_sonic(4)))
   FieldNames ("csat_warnings_B3")
   Totalize (1,1,IEEE4,NOT (FLowAmp_B3) OR NOT (disable_stats_sonic(4)))
@@ -567,6 +486,7 @@ DataTable (Stats_30Min, TRUE, -1)
   FieldNames ("Flag_TrigErr_Tot_B3")
 
   Totalize (1,1,IEEE4,disable_stats_sonic(5))
+  FieldNames ("csat_B2")  
   Totalize (1,1,IEEE4,NOT (disable_stats_sonic(5) OR disable_stats_sonic(6)))
   FieldNames ("csat_warnings_B2")
   Totalize (1,1,IEEE4,NOT (FLowAmp_B2) OR NOT (disable_stats_sonic(6)))
@@ -589,6 +509,7 @@ DataTable (Stats_30Min, TRUE, -1)
   FieldNames ("Flag_TrigErr_Tot_B2")
 
   Totalize (1,1,IEEE4,disable_stats_sonic(7))
+  FieldNames ("csat_B1")  
   Totalize (1,1,IEEE4,NOT (disable_stats_sonic(7) OR disable_stats_sonic(8)))
   FieldNames ("csat_warnings_B1")
   Totalize (1,1,IEEE4,NOT (FLowAmp_B1) OR NOT (disable_stats_sonic(8)))
@@ -616,10 +537,10 @@ BeginProg
 Move (sonic(1),20,NaN,20)
 	
 'Set all LI-7500 variables to NaN.
-Move (irga(1),8,NaN,8)
+Move (irga(1),16,NaN,16)
 
 'Set FW variables to NaN.
-Move (FW_B2,1,NaN,1)
+Move (FW_B1,4,NaN,4)
 	
 'Set 3.3 VDC for pps
 PortPairConfig (C1, 2)
@@ -636,7 +557,9 @@ Scan (SCN_INTV, mSec, SCAN_BUFFER_SIZE, 0)
   PanelTemp (PTemp_C,250) 'Measure data logger panel temperature
 
   'FW3 fine-wire thermocouple
-  TCDiff (FW_B2, 1, mV200, FW_ANALOG_INPUT, TypeE, PTemp_C, TRUE, 450, 250, 1, 0)
+  'TCDiff (FW_B1, 4, mV200, FW_ANALOG_INPUT, TypeE, PTemp_C, TRUE, 450, 250, 1, 0)
+  TCDiff (FW_B1, 1, mV200, FW_ANALOG_INPUT, TypeE, PTemp_C, TRUE, 450, 250, 1, 0)
+  TCDiff (FW_B3, 1, mV200, FW_ANALOG_INPUT+2, TypeE, PTemp_C, TRUE, 450, 250, 1, 0)
 
   'CSAT3B three dimensional sonic anemometer 
   CSAT3B(sonic(1),0,CSAT_SDM_ADDR_B4,0)
@@ -646,7 +569,9 @@ Scan (SCN_INTV, mSec, SCAN_BUFFER_SIZE, 0)
 
   'LI7500RS infrared CO2/H2O gas analyzer
   CS7500(irga(1),1,IRGA_SDM_ADDR_B4,7)
-  CS7500(irga(5),1,IRGA_SDM_ADDR_B2,7)
+  CS7500(irga(5),1,IRGA_SDM_ADDR_B3,7)
+  CS7500(irga(9),1,IRGA_SDM_ADDR_B2,7)
+  CS7500(irga(13),1,IRGA_SDM_ADDR_B1,7)
 	
   'Break up the sonic warning flags into separate bits.
   diag_integer = diag_sonic_B4
@@ -719,14 +644,22 @@ Scan (SCN_INTV, mSec, SCAN_BUFFER_SIZE, 0)
   '-------------------------------------------------------------------
   If ( NOT (co2_B4 = -99999) ) Then ( co2_B4 = co2_B4*44 )
   h2o_B4 = h2o_B4*0.018
+  If ( NOT (co2_B3 = -99999) ) Then ( co2_B3 = co2_B3*44 )
+  h2o_B3 = h2o_B3*0.018
   If ( NOT (co2_B2 = -99999) ) Then ( co2_B2 = co2_B2*44 )
   h2o_B2 = h2o_B2*0.018
+  If ( NOT (co2_B1 = -99999) ) Then ( co2_B1 = co2_B1*44 )
+  h2o_B1 = h2o_B1*0.018
    
   'Compute CO2 molar density by molar fraction (ppm)
    divisor = (Press_irga_B4/(R*(Ts_B4+273.15)))-(h2o_B4/18)
    mco2_B4 = co2_B4/(0.04401*divisor)
+   divisor = (Press_irga_B3/(R*(Ts_B3+273.15)))-(h2o_B3/18)
+   mco2_B3 = co2_B3/(0.04401*divisor)
    divisor = (Press_irga_B2/(R*(Ts_B2+273.15)))-(h2o_B2/18)
    mco2_B2 = co2_B2/(0.04401*divisor)
+   divisor = (Press_irga_B1/(R*(Ts_B1+273.15)))-(h2o_B1/18)
+   mco2_B1 = co2_B1/(0.04401*divisor)
 
   'Save time series data.
   CallTable Time_Series
