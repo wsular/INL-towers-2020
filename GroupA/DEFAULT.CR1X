@@ -1,7 +1,7 @@
 'CR1000X Series Datalogger
 'Copyright (c) 2020 Washington State University. Adapted with permission.
 
-'Date: August 2020
+'Date: August 2020, updated May 2022 to disable level A4 sensors
 'Program author: Zhongming Gao 
 'CR1000X for Group A @ 40 m (A.2.CR1000X)
 
@@ -591,9 +591,14 @@ BeginProg
  
 'set original variables to NaN
 Move (sonic(1),20,NaN,20)
+Move (monitor(1),16,NaN,1)
 	
 'Set all LI-7500 variables to NaN.
 Move (irga(1),16,NaN,16)
+Move (mco2(1),4,NaN,1)
+
+'Set all T/RH probe variables to NaN.
+Move (hmp(1),8,NaN,1)
 
 'Set FW variables to NaN.
 Move (FW_A2,1,NaN,1)
@@ -617,34 +622,34 @@ Scan (SCN_INTV, mSec, SCAN_BUFFER_SIZE, 0)
   TCDiff (FW_A2, 1, mV200, FW_ANALOG_INPUT, TypeE, PTemp_C, TRUE, 450, 250, 1, 0)
 
   'CSAT3B three dimensional sonic anemometer 
-  CSAT3B(sonic(1),0,CSAT_SDM_ADDR_A4,0)
+  'CSAT3B(sonic(1),0,CSAT_SDM_ADDR_A4,0)
   CSAT3B(sonic(6),0,CSAT_SDM_ADDR_A3,0)
   CSAT3B(sonic(11),0,CSAT_SDM_ADDR_A2,0)
   CSAT3B(sonic(16),0,CSAT_SDM_ADDR_A1,0)
 
   'LI7500RS infrared CO2/H2O gas analyzer
-  CS7500(irga(1),1,IRGA_SDM_ADDR_A4,7)
+  'CS7500(irga(1),1,IRGA_SDM_ADDR_A4,7)
   CS7500(irga(5),1,IRGA_SDM_ADDR_A3,7)
   CS7500(irga(9),1,IRGA_SDM_ADDR_A2,7)
   CS7500(irga(13),1,IRGA_SDM_ADDR_A1,7)
 	
   'Break up the sonic warning flags into separate bits.
-  diag_integer = diag_sonic_A4
-  diag_bits_sonic(1) = diag_integer AND &h00000001
-  diag_bits_sonic(2) = diag_integer AND &h00000002
-  diag_bits_sonic(3) = diag_integer AND &h00000004
-  diag_bits_sonic(4) = diag_integer AND &h00000008
-  diag_bits_sonic(5) = diag_integer AND &h00000010
-  diag_bits_sonic(6) = diag_integer AND &h00000020
-  diag_bits_sonic(7) = diag_integer AND &h00000040
-  diag_bits_sonic(8) = diag_integer AND &h00000080
-  diag_bits_sonic(9) = diag_integer AND &h00000100
-  'Turn on this intermediate processing disable flag when any
-  'warning flag is set or the data returned is NaN
-  disable_stats_sonic(1) = ((diag_integer AND &hffffffff) OR (diag_sonic_A4 = NaN))
-  'Turn on this intermediate processing disable flag only when
-  'CSAT3B diagnostic warning flags are set
-  disable_stats_sonic(2) = ((diag_integer AND &hffffffff) AND NOT (diag_sonic_A4 = NaN))
+'  diag_integer = diag_sonic_A4
+'  diag_bits_sonic(1) = diag_integer AND &h00000001
+'  diag_bits_sonic(2) = diag_integer AND &h00000002
+'  diag_bits_sonic(3) = diag_integer AND &h00000004
+'  diag_bits_sonic(4) = diag_integer AND &h00000008
+'  diag_bits_sonic(5) = diag_integer AND &h00000010
+'  diag_bits_sonic(6) = diag_integer AND &h00000020
+'  diag_bits_sonic(7) = diag_integer AND &h00000040
+'  diag_bits_sonic(8) = diag_integer AND &h00000080
+'  diag_bits_sonic(9) = diag_integer AND &h00000100
+'  'Turn on this intermediate processing disable flag when any
+'  'warning flag is set or the data returned is NaN
+'  disable_stats_sonic(1) = ((diag_integer AND &hffffffff) OR (diag_sonic_A4 = NaN))
+'  'Turn on this intermediate processing disable flag only when
+'  'CSAT3B diagnostic warning flags are set
+'  disable_stats_sonic(2) = ((diag_integer AND &hffffffff) AND NOT (diag_sonic_A4 = NaN))
  
   diag_integer = diag_sonic_A3
   diag_bits_sonic(10) = diag_integer AND &h00000001
@@ -702,8 +707,8 @@ Scan (SCN_INTV, mSec, SCAN_BUFFER_SIZE, 0)
   ' 44 [g/mol] - molecular weight of carbon dioxide
   ' 0.018 [g/mmol] - molecular weight of water vapor
   '-------------------------------------------------------------------
-  If ( NOT (co2_A4 = -99999) ) Then ( co2_A4 = co2_A4*44 )
-  h2o_A4 = h2o_A4*0.018
+'  If ( NOT (co2_A4 = -99999) ) Then ( co2_A4 = co2_A4*44 )
+'  h2o_A4 = h2o_A4*0.018
   If ( NOT (co2_A3 = -99999) ) Then ( co2_A3 = co2_A3*44 )
   h2o_A3 = h2o_A3*0.018
   If ( NOT (co2_A2 = -99999) ) Then ( co2_A2 = co2_A2*44 )
@@ -712,8 +717,8 @@ Scan (SCN_INTV, mSec, SCAN_BUFFER_SIZE, 0)
   h2o_A1 = h2o_A1*0.018
    
   'Compute CO2 molar density by molar fraction (ppm)
-   divisor = (Press_irga_A4/(R*(Ts_A4+273.15)))-(h2o_A4/18)
-   mco2_A4 = co2_A4/(0.04401*divisor)
+'   divisor = (Press_irga_A4/(R*(Ts_A4+273.15)))-(h2o_A4/18)
+'   mco2_A4 = co2_A4/(0.04401*divisor)
    divisor = (Press_irga_A3/(R*(Ts_A3+273.15)))-(h2o_A3/18)
    mco2_A3 = co2_A3/(0.04401*divisor)
    divisor = (Press_irga_A2/(R*(Ts_A2+273.15)))-(h2o_A2/18)
@@ -738,7 +743,7 @@ Scan (SLW_SCN_INTV,mSec,10,0)
   Battery (BattV)         'Measure battery voltage.
 
   'CSAT3B three dimensional sonic anemometer 
-  CSAT3BMonitor(monitor(1),0,CSAT_SDM_ADDR_A4)
+  'CSAT3BMonitor(monitor(1),0,CSAT_SDM_ADDR_A4)
   CSAT3BMonitor(monitor(5),0,CSAT_SDM_ADDR_A3)
   CSAT3BMonitor(monitor(9),0,CSAT_SDM_ADDR_A2)
   CSAT3BMonitor(monitor(13),0,CSAT_SDM_ADDR_A1)
@@ -780,9 +785,9 @@ Scan (SLW_SCN_INTV,mSec,10,0)
   AM25T(Tair_A1,2,mV1000,1,AM25T_DiffChan,-1,RTemp_C,AM25T_ClkPort,AM25T_ResPort,AM25T_ExChan,True,0,ANALOG_INTEGRATION,1,0)
   AM25T(Tair_A2,2,mV1000,3,AM25T_DiffChan,-1,RTemp_C,AM25T_ClkPort,AM25T_ResPort,AM25T_ExChan,True,0,ANALOG_INTEGRATION,1,0)
   AM25T(Tair_A3,2,mV1000,5,AM25T_DiffChan,-1,RTemp_C,AM25T_ClkPort,AM25T_ResPort,AM25T_ExChan,True,0,ANALOG_INTEGRATION,1,0)
-  AM25T(Tair_A4,2,mV1000,7,AM25T_DiffChan,-1,RTemp_C,AM25T_ClkPort,AM25T_ResPort,AM25T_ExChan,True,0,ANALOG_INTEGRATION,1,0)
-  Tair_A4 = Tair_A4 * TMPR_MULT_A4 + TMPR_OFFSET_A4
-  RH_A4   = RH_A4 * RH_MULT + RH_OFFSET
+'  AM25T(Tair_A4,2,mV1000,7,AM25T_DiffChan,-1,RTemp_C,AM25T_ClkPort,AM25T_ResPort,AM25T_ExChan,True,0,ANALOG_INTEGRATION,1,0)
+'  Tair_A4 = Tair_A4 * TMPR_MULT_A4 + TMPR_OFFSET_A4
+'  RH_A4   = RH_A4 * RH_MULT + RH_OFFSET
   Tair_A3 = Tair_A3 * TMPR_MULT + TMPR_OFFSET
   RH_A3   = RH_A3 * RH_MULT + RH_OFFSET
   Tair_A2 = Tair_A2 * TMPR_MULT + TMPR_OFFSET
@@ -790,7 +795,7 @@ Scan (SLW_SCN_INTV,mSec,10,0)
   Tair_A1 = Tair_A1 * TMPR_MULT + TMPR_OFFSET
   RH_A1   = RH_A1 * RH_MULT + RH_OFFSET
 
-  If (RH_A4 > 100 AND RH_A4 <103) Then (RH_A4 =100)
+'  If (RH_A4 > 100 AND RH_A4 <103) Then (RH_A4 =100)
   If (RH_A3 > 100 AND RH_A3 <103) Then (RH_A3 =100)
   If (RH_A2 > 100 AND RH_A2 <103) Then (RH_A2 =100)
   If (RH_A1 > 100 AND RH_A1 <103) Then (RH_A1 =100)
